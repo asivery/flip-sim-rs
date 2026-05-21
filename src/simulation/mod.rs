@@ -1,12 +1,29 @@
+mod cell;
+
+use cell::Cell;
+
 #[derive(Debug)]
 pub struct Simulation {
-    pub x: f32
+    width: usize,
+    height: usize,
+
+    grid: Vec<Cell>,
+
 }
 
 impl Simulation {
-    pub fn new() -> Simulation {
+    pub fn new(width: usize, height: usize) -> Simulation {
+        let total_cells = width * height;
+
         Simulation {
-            x: 0.0
+            width,
+            height,
+
+            grid: vec![Cell::default(); total_cells]
         }
+    }
+
+    pub fn step(&mut self) {
+
     }
 }
