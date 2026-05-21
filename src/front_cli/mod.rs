@@ -1,5 +1,7 @@
 use crate::simulation::Simulation; 
 
+use crate::front;
+
 use std::{thread, time::Duration};
 
 #[derive(Debug)]
@@ -9,19 +11,19 @@ pub struct FrontCLI {
     frames_per_second: f32
 }
 
-impl FrontCLI {
-    pub fn new(sim: Simulation) -> Self {
+impl front::FrontEnd for FrontCLI {
+    fn new(sim: Simulation) -> Self {
         Self {
             sim,
             frames_per_second: 2.0
         }
     }
 
-    pub fn init(&mut self) {
+    fn init(&mut self) {
 
     }
 
-    pub fn run(&mut self) {
+    fn run(&mut self) {
         loop {
             println!("Frame!");
 
@@ -32,7 +34,10 @@ impl FrontCLI {
         }
     }
 
-    pub fn draw_frame(&self) {
+}
+
+impl FrontCLI {
+    fn draw_frame(&self) {
         let config = &self.sim.config;
         for y in 0..config.height {
             for x in 0..config.width {

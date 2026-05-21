@@ -1,5 +1,6 @@
 use flip_sim_rs::simulation::*;
 use flip_sim_rs::front_cli::*;
+use flip_sim_rs::front::*;
 
 fn main() {
     let config = config::Config {
