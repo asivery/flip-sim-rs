@@ -1,5 +1,5 @@
 use crate::simulation::Simulation; 
-use crate::simulation::cell::CellTypes;
+use crate::simulation::cell::*;
 use crate::front;
 
 use std::{thread, time::Duration};
