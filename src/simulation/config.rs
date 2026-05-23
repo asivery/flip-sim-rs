@@ -7,7 +7,7 @@ pub struct Config {
     pub particleRadius: f64,
     pub maxParticles: f64,
     pub picFlipRaTio: f64,
-    pub gravity: f64,
+    pub gravity: (f64,f64),
     pub dt: f64,
     pub overRelaxation: f64
 }
