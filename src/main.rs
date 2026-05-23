@@ -2,6 +2,7 @@ use flip_sim_rs::simulation::*;
 use flip_sim_rs::front_wgpu::*;
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use winit::{
     application::ApplicationHandler, 
@@ -10,7 +11,6 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey}, 
     window::*
 };
-
 
 fn main() {
     let config = config::Config {
@@ -27,7 +27,7 @@ fn main() {
     };
 
     let runtime_config = config::RuntimeConfig {
-        dt: 1.0 / 120.0,
+        dt: 1.0 / 1000.0,
         gravity: (0.0, 0.91),
         flip_ratio: 0.9,
         num_pressure_iters: 50,
@@ -52,6 +52,8 @@ fn main() {
         front: None,
         sim: Some(sim),
         runtime_config,
+        last_frame: Instant::now(),
+        frame_acc: 0.0
     };
 
     event_loop.run_app(&mut app).unwrap();
@@ -62,6 +64,9 @@ struct App {
     front: Option<FrontWgpu>,
     sim: Option<Simulation>,
     runtime_config: config::RuntimeConfig,
+
+    last_frame: Instant,
+    frame_acc: f32,
 }
 
 
@@ -84,6 +89,7 @@ impl ApplicationHandler for App {
         let sim = self.sim.take().unwrap();
         let front = pollster::block_on(FrontWgpu::new(Arc::clone(&window), sim, self.runtime_config.clone()));
  
+        self.last_frame = Instant::now();
         self.window = Some(window);
         self.front = Some(front);
     }
@@ -111,7 +117,17 @@ impl ApplicationHandler for App {
             }
  
             WindowEvent::RedrawRequested => {
-                front.sim.simulate(&front.runtime_config);
+                let now = Instant::now();
+                let elapsed = (now - self.last_frame).as_secs_f32().min(0.25);
+                self.last_frame = now;
+
+                self.frame_acc += elapsed;
+                let dt = front.runtime_config.dt;
+                while self.frame_acc >= dt {
+                    front.sim.simulate(&front.runtime_config);
+                    self.frame_acc -= dt;
+                }
+
                 front.render();
                 self.window.as_ref().unwrap().request_redraw();
             }
