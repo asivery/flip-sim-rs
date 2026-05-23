@@ -1,6 +1,8 @@
 #[derive(Debug, Clone, Copy)]
+enum CellType{Solid,Liquid,Gas}
+
 pub struct Cell {
-    pub test: bool,
+    pub type: CellType,
 }
 
 impl Default for Cell {
