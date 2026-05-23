@@ -2,7 +2,7 @@ pub mod config;
 pub mod cell;
 pub mod particle;
 
-use config::Config;
+use config::*;
 use cell::*;
 use particle::*;
 
@@ -98,7 +98,8 @@ impl Simulation {
 
     pub fn integrate_particles(&mut self, dt:f32,gravity: (f32,f32)) {
         let (gx,gy) = gravity;
-        for part in self.particles.iter_mut() {
+        // we need take() because num_particles != max_particles
+        for part in self.particles.iter_mut().take(self.num_particles) {
             part.vx += dt * gx;
             part.vy += dt * gy;
             part.x += part.vx * dt;
@@ -184,8 +185,6 @@ impl Simulation {
                             self.particles[i].y -= dy;
                             self.particles[id].x += dx;
                             self.particles[id].y += dy;
-
-                            //here should be some color shit, and i cba doing that. as of writing this i have 0 clue if cell color is calculated by particle color, so if so we're fucked (maybe).
                         }
                     }
                 }
@@ -242,9 +241,301 @@ impl Simulation {
         std::mem::swap(&mut self.read_grid, &mut self.write_grid);
     }
 
-    // TODO: Transfer Velocities
-    // TODO: solve incompressibility
-    // TODO: update cell colors
-    // TODO: Set Sci Color whatever that means
-    // TODO: simulate
+    pub fn handle_particle_collisions(&mut self, obstacle_x: f32, obstacle_y: f32, obstacle_radius: f32, obstacle_vel_x: f32, obstacle_vel_y: f32) {
+        let h = 1.0 / self.f_inv_spacing;
+        let r = self.config.particle_radius;
+        let min_dist = obstacle_radius + r;
+        let min_dist2 = min_dist * min_dist;
+
+        let min_x = h + r;
+        let max_x = (self.f_num_x as f32 - 1.0) * h - r;
+        let min_y = h + r;
+        let max_y = (self.f_num_y as f32 - 1.0) * h - r;
+
+        for i in 0..self.num_particles {
+            let mut x = self.particles[i].x;
+            let mut y = self.particles[i].y;
+
+            let dx = x - obstacle_x;
+            let dy = y - obstacle_y;
+            let d2 = dx * dx + dy * dy;
+
+            if d2 < min_dist2 {
+                self.particles[i].vx = obstacle_vel_x;
+                self.particles[i].vy = obstacle_vel_y;
+            }
+
+            if x < min_x {
+                x = min_x;
+                self.particles[i].vx = 0.0;
+            }
+            if x > max_x {
+                x = max_x;
+                self.particles[i].vx = 0.0;
+            }
+            if y < min_y {
+                y = min_y;
+                self.particles[i].vy = 0.0;
+            }
+            if y > max_y {
+                y = max_y;
+                self.particles[i].vy = 0.0;
+            }
+
+            self.particles[i].x = x;
+            self.particles[i].y = y;
+        }
+    }
+
+    // to jest tak brzydkie że będzie trzeba refactorować xd
+    pub fn transfer_velocities(&mut self, to_grid: bool, flip_ratio: f32) {
+        let n = self.f_num_y;
+        let h = self.h;
+        let h1 = self.f_inv_spacing;
+        let h2 = 0.5 * h;
+
+        self.write_grid.copy_from_slice(&self.read_grid);
+
+        if to_grid {
+            for cell in self.write_grid.iter_mut() {
+                cell.prev_u = cell.u;
+                cell.prev_v = cell.v;
+                cell.u = 0.0;
+                cell.v = 0.0;
+                cell.du = 0.0;
+                cell.dv = 0.0;
+                cell.cell_type = if cell.s == 0.0 { CellTypes::Solid } else { CellTypes::Gas };
+            }
+
+            for i in 0..self.num_particles {
+                let p = &self.particles[i];
+                let xi = ((p.x * h1).floor() as i32).clamp(0, self.f_num_x as i32 - 1) as usize;
+                let yi = ((p.y * h1).floor() as i32).clamp(0, self.f_num_y as i32 - 1) as usize;
+                let cell_nr = xi * n + yi;
+                if self.write_grid[cell_nr].cell_type == CellTypes::Gas {
+                    self.write_grid[cell_nr].cell_type = CellTypes::Liquid;
+                }
+            }
+        }
+
+        for component in 0..2 {
+            let dx = if component == 0 { 0.0 } else { h2 };
+            let dy = if component == 0 { h2 } else { 0.0 };
+
+            for i in 0..self.num_particles {
+                let p = &self.particles[i];
+                let x = p.x.clamp(h, (self.f_num_x as f32 - 1.0) * h);
+                let y = p.y.clamp(h, (self.f_num_y as f32 - 1.0) * h);
+
+                let x0 = (((x - dx) * h1).floor() as usize).min(self.f_num_x - 2);
+                let tx = ((x - dx) - x0 as f32 * h) * h1;
+                let x1 = (x0 + 1).min(self.f_num_x - 2);
+
+                let y0 = (((y - dy) * h1).floor() as usize).min(self.f_num_y - 2);
+                let ty = ((y - dy) - y0 as f32 * h) * h1;
+                let y1 = (y0 + 1).min(self.f_num_y - 2);
+
+                let sx = 1.0 - tx;
+                let sy = 1.0 - ty;
+                let d0 = sx * sy;
+                let d1 = tx * sy;
+                let d2 = tx * ty;
+                let d3 = sx * ty;
+
+                let nr0 = x0 * n + y0;
+                let nr1 = x1 * n + y0;
+                let nr2 = x1 * n + y1;
+                let nr3 = x0 * n + y1;
+
+                if to_grid {
+                    let pv = if component == 0 { p.vx } else { p.vy };
+                    if component == 0 {
+                        self.write_grid[nr0].u += pv * d0; self.write_grid[nr0].du += d0;
+                        self.write_grid[nr1].u += pv * d1; self.write_grid[nr1].du += d1;
+                        self.write_grid[nr2].u += pv * d2; self.write_grid[nr2].du += d2;
+                        self.write_grid[nr3].u += pv * d3; self.write_grid[nr3].du += d3;
+                    } else {
+                        self.write_grid[nr0].v += pv * d0; self.write_grid[nr0].dv += d0;
+                        self.write_grid[nr1].v += pv * d1; self.write_grid[nr1].dv += d1;
+                        self.write_grid[nr2].v += pv * d2; self.write_grid[nr2].dv += d2;
+                        self.write_grid[nr3].v += pv * d3; self.write_grid[nr3].dv += d3;
+                    }
+                } else {
+                    let offset = if component == 0 { n } else { 1 };
+                    
+                    let valid0 = if self.read_grid[nr0].cell_type != CellTypes::Gas || self.read_grid[nr0.saturating_sub(offset)].cell_type != CellTypes::Gas { 1.0 } else { 0.0 };
+                    let valid1 = if self.read_grid[nr1].cell_type != CellTypes::Gas || self.read_grid[nr1.saturating_sub(offset)].cell_type != CellTypes::Gas { 1.0 } else { 0.0 };
+                    let valid2 = if self.read_grid[nr2].cell_type != CellTypes::Gas || self.read_grid[nr2.saturating_sub(offset)].cell_type != CellTypes::Gas { 1.0 } else { 0.0 };
+                    let valid3 = if self.read_grid[nr3].cell_type != CellTypes::Gas || self.read_grid[nr3.saturating_sub(offset)].cell_type != CellTypes::Gas { 1.0 } else { 0.0 };
+
+                    let v = if component == 0 { p.vx } else { p.vy };
+                    let d = valid0 * d0 + valid1 * d1 + valid2 * d2 + valid3 * d3;
+
+                    if d > 0.0 {
+                        let (f0, f1, f2, f3) = if component == 0 {
+                            (self.read_grid[nr0].u, self.read_grid[nr1].u, self.read_grid[nr2].u, self.read_grid[nr3].u)
+                        } else {
+                            (self.read_grid[nr0].v, self.read_grid[nr1].v, self.read_grid[nr2].v, self.read_grid[nr3].v)
+                        };
+
+                        let (pf0, pf1, pf2, pf3) = if component == 0 {
+                            (self.read_grid[nr0].prev_u, self.read_grid[nr1].prev_u, self.read_grid[nr2].prev_u, self.read_grid[nr3].prev_u)
+                        } else {
+                            (self.read_grid[nr0].prev_v, self.read_grid[nr1].prev_v, self.read_grid[nr2].prev_v, self.read_grid[nr3].prev_v)
+                        };
+
+                        let pic_v = (valid0 * d0 * f0 + valid1 * d1 * f1 + valid2 * d2 * f2 + valid3 * d3 * f3) / d;
+                        let corr = (valid0 * d0 * (f0 - pf0) + valid1 * d1 * (f1 - pf1) + valid2 * d2 * (f2 - pf2) + valid3 * d3 * (f3 - pf3)) / d;
+                        let flip_v = v + corr;
+
+                        if component == 0 {
+                            self.particles[i].vx = (1.0 - flip_ratio) * pic_v + flip_ratio * flip_v;
+                        } else {
+                            self.particles[i].vy = (1.0 - flip_ratio) * pic_v + flip_ratio * flip_v;
+                        }
+                    }
+                }
+            }
+
+            if to_grid {
+                for i in 0..self.f_num_cells {
+                    if component == 0 {
+                        if self.write_grid[i].du > 0.0 { self.write_grid[i].u /= self.write_grid[i].du; }
+                    } else {
+                        if self.write_grid[i].dv > 0.0 { self.write_grid[i].v /= self.write_grid[i].dv; }
+                    }
+                }
+
+                for i in 0..self.f_num_x {
+                    for j in 0..self.f_num_y {
+                        let solid = self.write_grid[i * n + j].cell_type == CellTypes::Solid;
+                        if component == 0 {
+                            if solid || (i > 0 && self.write_grid[(i - 1) * n + j].cell_type == CellTypes::Solid) {
+                                self.write_grid[i * n + j].u = self.write_grid[i * n + j].prev_u;
+                            }
+                        } else {
+                            if solid || (j > 0 && self.write_grid[i * n + j.saturating_sub(1)].cell_type == CellTypes::Solid) {
+                                self.write_grid[i * n + j].v = self.write_grid[i * n + j].prev_v;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if to_grid {
+            std::mem::swap(&mut self.read_grid, &mut self.write_grid);
+        }
+    }
+    
+    pub fn solve_incompressibility(&mut self, num_iters: usize, dt: f32, over_relaxation: f32, compensate_drift: bool) {
+        let n = self.f_num_y;
+        let cp = self.config.density * self.h / dt;
+
+        for _ in 0..num_iters {
+            self.write_grid.copy_from_slice(&self.read_grid);
+
+            for i in 1..self.f_num_x - 1 {
+                for j in 1..self.f_num_y - 1 {
+                    let center = i * n + j;
+                    if self.read_grid[center].cell_type != CellTypes::Liquid {
+                        continue;
+                    }
+
+                    let left = (i - 1) * n + j;
+                    let right = (i + 1) * n + j;
+                    let bottom = i * n + j - 1;
+                    let top = i * n + j + 1;
+
+                    let sx0 = self.read_grid[left].s;
+                    let sx1 = self.read_grid[right].s;
+                    let sy0 = self.read_grid[bottom].s;
+                    let sy1 = self.read_grid[top].s;
+                    let s = sx0 + sx1 + sy0 + sy1;
+                    
+                    if s == 0.0 { continue; }
+
+                    let mut div = self.read_grid[right].u - self.read_grid[center].u + self.read_grid[top].v - self.read_grid[center].v;
+
+                    if self.particle_rest_density > 0.0 && compensate_drift {
+                        let k = 1.0;
+                        let compression = self.read_grid[center].particle_density - self.particle_rest_density;
+                        if compression > 0.0 {
+                            div -= k * compression;
+                        }
+                    }
+
+                    let mut p = -div / s;
+                    p *= over_relaxation;
+                    
+                    self.write_grid[center].p += cp * p;
+                    self.write_grid[center].u -= sx0 * p;
+                    self.write_grid[right].u  += sx1 * p;
+                    self.write_grid[center].v -= sy0 * p;
+                    self.write_grid[top].v    += sy1 * p;
+                }
+            }
+            std::mem::swap(&mut self.read_grid, &mut self.write_grid);
+        }
+    }
+
+    pub fn update_cell_colors(&mut self) {
+        self.write_grid.copy_from_slice(&self.read_grid);
+
+        for i in 0..self.f_num_cells {
+            if self.write_grid[i].cell_type == CellTypes::Solid {
+                self.write_grid[i].color = (0.5, 0.5, 0.5);
+            }
+            else if self.write_grid[i].cell_type == CellTypes::Liquid {
+                let mut d = self.write_grid[i].particle_density;
+                if self.particle_rest_density > 0.0 {
+                    d /= self.particle_rest_density;
+                }
+
+                let mut val = d.clamp(0.0, 1.99);
+                val /= 2.0;
+
+                let m = 0.25;
+                let num = (val / m).floor() as i32;
+                let s = (val - num as f32 * m) / m;
+                
+                self.write_grid[i].color = match num {
+                    0 => (0.0, s, 1.0),
+                    1 => (0.0, 1.0, 1.0 - s),
+                    2 => (s, 1.0, 0.0),
+                    3 => (1.0, 1.0 - s, 0.0),
+                    _ => (0.0, 0.0, 0.0),
+                };
+            }
+        }
+
+        std::mem::swap(&mut self.read_grid, &mut self.write_grid);
+    }
+
+    pub fn simulate(&mut self, runtime: RuntimeConfig) {
+        self.integrate_particles(runtime.dt, runtime.gravity);
+
+        if runtime.separate_particles {
+            self.push_particles_apart(runtime.num_particle_iters);
+        }
+        self.handle_particle_collisions(
+            runtime.obstacle_x, 
+            runtime.obstacle_y, 
+            runtime.obstacle_radius, 
+            runtime.obstacle_vel_x, 
+            runtime.obstacle_vel_y
+        );
+        
+        self.transfer_velocities(true, runtime.flip_ratio);
+        self.update_particle_density();
+        self.solve_incompressibility(
+            runtime.num_pressure_iters, 
+            runtime.dt, 
+            runtime.over_relaxation, 
+            runtime.compensate_drift
+        );
+        self.transfer_velocities(false, runtime.flip_ratio);
+        
+        self.update_cell_colors();
+    }
 }
