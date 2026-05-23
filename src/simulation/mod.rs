@@ -36,7 +36,7 @@ pub struct Simulation {
     pub p_num_cells: usize,
 
     pub num_cell_particles: Vec<i32>,
-    pub first_cell_particle: Vec<i32>,
+    pub first_cell_particle: Vec<usize>,
     pub cell_particle_ids: Vec<i32>,
 
     pub num_particles: i32
@@ -139,7 +139,92 @@ impl Simulation {
 
     }
 
-    // TODO: Push Particles Apart
+    pub fn push_particles_apart(&mut self, num_iters: usize){
+        self.num_cell_particles.fill(0);
+
+        for i in 0..self.num_particles{
+            let x = self.particle_pos[2 *i as usize];
+            let y = self.particle_pos[2*i as usize+1];
+
+            let xi = ((x*self.p_inv_spacing).floor() as i32).clamp(0, (self.p_num_x - 1) as i32) as usize;
+            let yi = ((y*self.p_inv_spacing).floor() as i32).clamp(0, (self.p_num_y - 1) as i32) as usize;
+            let cell_nr = xi * self.p_num_y + yi;
+            self.num_cell_particles[cell_nr] += 1;
+        }
+
+        let mut first = 0;
+        for i in 0..self.p_num_cells{
+            first += self.num_cell_particles[i];
+            self.first_cell_particle[i] = first as usize;
+        }
+        self.first_cell_particle[self.p_num_cells] = first as usize;
+
+        for i in 0..self.num_particles {
+            let x = self.particle_pos[2 * i as usize];
+            let y = self.particle_pos[2 * i as usize + 1];
+
+            let xi = ((x * self.p_inv_spacing).floor() as i32)
+                .clamp(0, (self.p_num_x - 1) as i32) as usize;
+            let yi = ((y * self.p_inv_spacing).floor() as i32)
+                .clamp(0, (self.p_num_y - 1) as i32) as usize;
+            let cell_nr = xi * self.p_num_y + yi;
+            self.first_cell_particle[cell_nr] -= 1;
+            let idx = self.first_cell_particle[cell_nr];
+            self.cell_particle_ids[idx] = i;
+        }
+
+        let min_dist = 2.0 * self.config.particle_radius;
+        let min_dist2 = min_dist * min_dist;
+
+        for _iter in 0..num_iters{
+            for i in 0..self.num_particles{
+                let px = self.particle_pos[2*i as usize];
+                let py = self.particle_pos[2*i as usize +1];
+
+                let pxi = (px*self.p_inv_spacing).floor() as i32;
+                let pyi = (py*self.p_inv_spacing).floor() as i32;
+                let x0 = (pxi -1 ).max(0);
+                let y0 = (pyi -1 ).max(0);
+                let x1 = (pxi+1).min(self.p_num_x as i32 -1) as i32;
+                let y1 = (pyi+1).min(self.p_num_y as i32 -1) as i32;
+
+                for xi in x0..x1{
+                    for yi in y0..y1{
+                        let cell_nr = (xi * self.p_num_y as i32 + yi) as usize;
+                        let first = self.first_cell_particle[cell_nr];
+                        let last = self.first_cell_particle[cell_nr+1];
+                        for j in first..last{
+                            let id = self.cell_particle_ids[j];
+                            if id == 1{
+                                continue;
+                            }
+                            let qx = self.particle_pos[2*id as usize];
+                            let qy = self.particle_pos[2*id as usize + 1];
+
+                            let mut dx = qx - px;
+                            let mut dy = qy - py;
+                            let d2 = dx * dx + dy * dy;
+                            if d2 > min_dist2 || d2 == 0.0{
+                                continue;
+                            }
+                            let d = d2.sqrt();
+                            let s = 0.5 * (min_dist - d) /d;
+                            dx = dx * s;
+                            dy = dy * s;
+                            self.particle_pos[2*i as usize] -= dx;
+                            self.particle_pos[2*i as usize + 1] -= dy;
+                            self.particle_pos[2*id as usize] += dx;
+                            self.particle_pos[2*id as usize + 1] += dx;
+
+                            //here should be some color shit, and i cba doing that. as of writing this i have 0 clue if cell color is calculated by particle color, so if so we're fucked (maybe).
+                        }
+                    }
+
+                }
+            }
+        }
+    }
+
     // TODO: Handle Particle Collisions
     // TODO: Transfer Velocities
     // TODO: Update particle density
