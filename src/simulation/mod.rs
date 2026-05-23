@@ -6,6 +6,7 @@ use cell::*;
 
 use rand::prelude::*;
 
+
 #[derive(Debug)]
 pub struct Simulation {
     pub config: Config,
@@ -24,6 +25,8 @@ pub struct Simulation {
     pub prev_v: Vec<f32>,
     pub p: Vec<f32>,
     pub s: Vec<f32>,
+    pub cell_type: Vec<CellTypes>,
+    pub cell_color: Vec<f32>,
 
     pub particle_pos: Vec<f32>,
     pub particle_vel: Vec<f32>,
@@ -92,6 +95,8 @@ impl Simulation {
             prev_v,
             p,
             s,
+            cell_color: vec![0.0; 3*f_num_cells],
+            cell_type: vec![CellTypes::Liquid; f_num_cells],
 
             particle_pos,
             particle_vel,
@@ -219,15 +224,79 @@ impl Simulation {
                             //here should be some color shit, and i cba doing that. as of writing this i have 0 clue if cell color is calculated by particle color, so if so we're fucked (maybe).
                         }
                     }
-
                 }
             }
         }
     }
 
-    // TODO: Handle Particle Collisions
+    pub fn update_particle_density(&mut self){
+        let n = self.f_num_y;
+        let h = self.h;
+        let h1 = self.f_inv_spacing;
+        let h2 = 0.5 * h;
+
+        self.particle_density.fill(0.0);
+
+        for i in 0..self.num_particles{
+            let mut x = self.particle_pos[2 * i as usize];
+            let mut y = self.particle_pos[2*i as usize + 1];
+
+            x = x.clamp(h, (self.f_num_x - 1) as f32 * h);
+            y = y.clamp(h, (self.f_num_y - 1) as f32 * h);
+
+            let x0 = ((x - h2) * h1).floor() as i32;
+            let tx = ((x - h2) - x0 as f32 * h) * h1;
+            let x1 = (x0 + 1).min(self.f_num_y as i32-2);
+
+            let y0 = ((y - h2) * h1).floor() as i32;
+            let ty = ((y - h2) - (y0 as f32) * h) * h1;
+            let y1 = (y0 + 1).min((self.f_num_y - 2) as i32);
+
+            let sx = 1.0 - tx;
+            let sy = 1.0 - ty;
+
+            if x0 < self.f_num_x as i32 && y0 < self.f_num_y as i32 {self.particle_density[x0 as usize * n + y0 as usize] += sx*sy}
+            if x1 < self.f_num_x as i32 && y0 < self.f_num_y as i32 {self.particle_density[x1 as usize * n + y0 as usize] += tx*sy}
+            if x1 < self.f_num_x as i32 && y1 < self.f_num_y as i32 {self.particle_density[x1 as usize * n + y1 as usize] += tx*ty}
+            if x0 < self.f_num_x as i32 && y1 < self.f_num_y as i32 {self.particle_density[x0 as usize * n + y1 as usize] += sx*ty}
+        }
+
+        if self.particle_rest_density == 0.0{
+            let mut sum = 0.0;
+            let mut num_fluid_cells = 0;
+
+            for i in 0..self.f_num_cells{
+                if self.cell_type[i] == CellTypes::Liquid{
+                    sum += self.particle_density[i];
+                    num_fluid_cells += 1;
+                }
+            }
+            if num_fluid_cells > 0{
+                self.particle_rest_density = sum / num_fluid_cells as f32;
+            }
+        }
+
+// 			for (var xi = 1; xi < this.fNumX; xi++) {
+// 				for (var yi = 1; yi < this.fNumY; yi++) {
+// 					var cellNr = xi * n + yi;
+// 					if (this.cellType[cellNr] != FLUID_CELL)
+// 						continue;
+// 					var hx = this.h;
+// 					var hy = this.h;
+
+// 					if (this.cellType[(xi - 1) * n + yi] == SOLID_CELL || this.cellType[(xi + 1) * n + yi] == SOLID_CELL)
+// 						hx -= this.particleRadius;
+// 					if (this.cellType[xi * n + yi - 1] == SOLID_CELL || this.cellType[xi * n + yi + 1] == SOLID_CELL)
+// 						hy -= this.particleRadius;
+
+// 					var scale = this.h * this.h / (hx * hy)
+// 					d[cellNr] *= scale;
+// 				}
+// 			}
+    }
+
+    // TODO: Handle Particle Collisions, this might not be needed, idk really :3
     // TODO: Transfer Velocities
-    // TODO: Update particle density
     // TODO: solve incompressibility
     // TODO: update cell colors
     // TODO: Set Sci Color whatever that means
