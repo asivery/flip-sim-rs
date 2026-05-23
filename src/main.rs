@@ -16,7 +16,7 @@ fn main() {
         // over_relaxation: 1.9
     };
 
-    let sim = Simulation::new(config); 
+    let sim = Simulation::new(&config); 
     let mut front = FrontCLI::new(sim);
 
     front.init();
