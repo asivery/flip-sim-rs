@@ -45,7 +45,7 @@ fn main() {
             for y in 0..sim.f_num_y {
                 let mut s = 1.0; 
 
-                if x == 0 || x == sim.f_num_x - 1 || y == 0 {   // usuń y == f_num_y-1 (poprawka z chata, pewnio gówno warta)
+                if x == 0 || x == sim.f_num_x - 1 || y == 0 {   
                     s = 0.0;
                 }
                 

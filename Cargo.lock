@@ -424,6 +424,7 @@ name = "flip_sim_rs"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "padding-struct",
  "pollster",
  "rand",
  "wgpu",
@@ -1239,6 +1240,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
 dependencies = [
  "ttf-parser",
+]
+
+[[package]]
+name = "padding-struct"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58209c5739149c742a36d77ebfff339c35269cf014df9560b03974e37bdee6bf"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

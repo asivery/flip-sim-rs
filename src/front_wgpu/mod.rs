@@ -1,5 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
+use padding_struct::padding_struct;
 
 use crate::simulation::Simulation;
 use crate::simulation::config::*;
@@ -13,6 +15,14 @@ pub struct ParticleInstance {
     pub color: [f32; 3],
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct Uniforms {
+    pub scale: f32,
+    pub _padding: [f32; 3], // 16-byte alignment
+}
+
+
 pub struct FrontWgpu {
     _window: Arc<winit::window::Window>, // workaround z tutoriala
     surface: wgpu::Surface<'static>, 
@@ -23,6 +33,9 @@ pub struct FrontWgpu {
 
     render_pipeline: wgpu::RenderPipeline,
     particle_buffer: wgpu::Buffer,
+
+    uniform_buffer: wgpu::Buffer,
+    uniform_bind_group: wgpu::BindGroup,
 
     pub sim: Simulation,
     pub runtime_config: RuntimeConfig
@@ -65,11 +78,51 @@ impl FrontWgpu {
             mapped_at_creation: false,
         });
 
+        let uniform_data = Uniforms {
+            scale: (sim.config.particle_radius / sim.config.width  as f32) * 5.0,
+            _padding: [0.0, 0.0, 0.0]
+        };
+
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[uniform_data]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let uniform_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None
+                    },
+                    count: None,
+                }
+            ],
+            label: Some("uniform_bind_group_layout"),
+        });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &uniform_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                }
+            ],
+            label: Some("uniform_bind_group")
+        });
+
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Some Pipeline Layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[
+                Some(&uniform_bind_group_layout)
+            ],
             immediate_size: 0,
         });
 
@@ -111,6 +164,7 @@ impl FrontWgpu {
             cache: None
         });
 
+
         Self {
             _window: window,
             surface, 
@@ -120,6 +174,8 @@ impl FrontWgpu {
             phys_size,
             render_pipeline, 
             particle_buffer, 
+            uniform_buffer,
+            uniform_bind_group,
             sim,
             runtime_config
         }
@@ -175,6 +231,7 @@ impl FrontWgpu {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.particle_buffer.slice(..));
             render_pass.draw(0..4, 0..self.sim.num_particles as u32);
         }
