@@ -36,6 +36,9 @@ fn main() {
         obstacle_radius: 0.0,
         obstacle_vel_x: 0.0,
         obstacle_vel_y: 0.0,
+
+        draw_grid: true,
+        draw_particles: false,
     };
 
     let mut sim = Simulation::new(&config); 

@@ -28,4 +28,7 @@ pub struct RuntimeConfig {
     pub obstacle_radius: f32,
     pub obstacle_vel_x: f32,
     pub obstacle_vel_y: f32,
+
+    pub draw_grid: bool,
+    pub draw_particles: bool,
 }

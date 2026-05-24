@@ -283,15 +283,17 @@ impl FrontWgpu {
             
             render_pass.set_pipeline(&self.render_pipeline);
 
-            // grid
-            render_pass.set_bind_group(0, &self.grid_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.grid_buffer.slice(..));
-            render_pass.draw(0..4, 0..self.sim.f_num_cells as u32);
+            if self.runtime_config.draw_grid {
+                render_pass.set_bind_group(0, &self.grid_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.grid_buffer.slice(..));
+                render_pass.draw(0..4, 0..self.sim.f_num_cells as u32);
+            }
 
-            // particle
-            render_pass.set_bind_group(0, &self.particle_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.particle_buffer.slice(..));
-            render_pass.draw(0..4, 0..self.sim.num_particles as u32);
+            if self.runtime_config.draw_particles {
+                render_pass.set_bind_group(0, &self.particle_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.particle_buffer.slice(..));
+                render_pass.draw(0..4, 0..self.sim.num_particles as u32);
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
