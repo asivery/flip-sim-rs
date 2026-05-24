@@ -32,7 +32,7 @@ fn main() {
         flip_ratio: 0.9,
         num_pressure_iters: 50,
         num_particle_iters: 2,
-        over_relaxation: 1.0,
+        over_relaxation: 1.9,
         compensate_drift: true,
         separate_particles: true,
         obstacle_x: 0.0,

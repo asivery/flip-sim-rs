@@ -511,7 +511,7 @@ impl Simulation {
         let cp = self.config.density * self.h / dt;
 
         for _ in 0..num_iters {
-            self.write_grid.copy_from_slice(&self.read_grid);
+            // self.write_grid.copy_from_slice(&self.read_grid);
 
             for i in 1..self.f_num_x - 1 {
                 for j in 1..self.f_num_y - 1 {
@@ -531,7 +531,7 @@ impl Simulation {
                     let sy1 = self.read_grid[top].s;
                     let s = sx0 + sx1 + sy0 + sy1;
                     
-                    if s == 0.0 { continue; }
+                    if s < 0.1 { continue; }
 
                     let mut div = self.read_grid[right].u - self.read_grid[center].u + self.read_grid[top].v - self.read_grid[center].v;
 
@@ -545,15 +545,21 @@ impl Simulation {
 
                     let mut p = -div / s;
                     p *= over_relaxation;
+
+                    self.read_grid[center].p += cp * p;
+                    self.read_grid[center].u -= sx0 * p;
+                    self.read_grid[right].u  += sx1 * p;
+                    self.read_grid[center].v -= sy0 * p;
+                    self.read_grid[top].v    += sy1 * p;
                     
-                    self.write_grid[center].p += cp * p;
-                    self.write_grid[center].u -= sx0 * p;
-                    self.write_grid[right].u  += sx1 * p;
-                    self.write_grid[center].v -= sy0 * p;
-                    self.write_grid[top].v    += sy1 * p;
+                    // self.write_grid[center].p += cp * p;
+                    // self.write_grid[center].u -= sx0 * p;
+                    // self.write_grid[right].u  += sx1 * p;
+                    // self.write_grid[center].v -= sy0 * p;
+                    // self.write_grid[top].v    += sy1 * p;
                 }
             }
-            std::mem::swap(&mut self.read_grid, &mut self.write_grid);
+            // std::mem::swap(&mut self.read_grid, &mut self.write_grid); borrow checker fix unfix
         }
     }
 
