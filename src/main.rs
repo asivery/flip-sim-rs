@@ -2,7 +2,7 @@ use flip_sim_rs::simulation::*;
 use flip_sim_rs::front_wgpu::*;
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use winit::{
     application::ApplicationHandler, 

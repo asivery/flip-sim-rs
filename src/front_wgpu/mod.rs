@@ -1,7 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
-use padding_struct::padding_struct;
 
 use crate::simulation::Simulation;
 use crate::simulation::config::*;
@@ -39,10 +38,6 @@ pub struct FrontWgpu {
     
     grid_buffer: wgpu::Buffer,
     grid_bind_group: wgpu::BindGroup,
-
-    grid_uniform_buffer: wgpu::Buffer,
-    particle_uniform_buffer: wgpu::Buffer,
-    uniform_bind_group_layout: wgpu::BindGroupLayout,
 
     pub sim: Simulation,
     pub runtime_config: RuntimeConfig
@@ -200,11 +195,8 @@ impl FrontWgpu {
             phys_size,
             render_pipeline, 
             particle_buffer, 
-            grid_uniform_buffer,
-            particle_uniform_buffer,
-            uniform_bind_group_layout,
-            grid_bind_group,
             grid_buffer,
+            grid_bind_group,
             particle_bind_group,
             sim,
             runtime_config
