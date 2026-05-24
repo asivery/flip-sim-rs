@@ -10,7 +10,6 @@ use particle::*;
 pub struct Simulation {
     pub config: Config,
     
-    // double buffering, to avoid weird borrow checker workarounds
     pub grid: Vec<Cell>,
 
     pub f_num_x: usize,
@@ -30,7 +29,7 @@ pub struct Simulation {
     pub num_cell_particles: Vec<i32>,
     pub first_cell_particle: Vec<usize>,
     pub cell_particle_ids: Vec<usize>,
-    pub particle_cell_nrs: Vec<usize>, // <--- Add this
+    pub particle_cell_nrs: Vec<usize>, 
 
     pub num_particles: usize
 
@@ -76,8 +75,6 @@ impl Simulation {
                     break 'spawn;
                 }
                 
-                // Add a microscopic jitter to the X position to prevent particles 
-                // from perfectly stacking and causing a division by zero later
                 let jitter = if p_idx % 2 == 0 { 1e-4 } else { -1e-4 };
 
                 particles[p_idx].x = h + r + dx * i as f32 + if j % 2 == 0 { 0.0 } else { r } + jitter;
@@ -130,6 +127,7 @@ impl Simulation {
         }
     }
 
+    // todo: jakoś to zrefactorować
     pub fn push_particles_apart(&mut self, num_iters: usize){
         let min_dist = 2.0 * self.config.particle_radius;
         let min_dist2 = min_dist * min_dist;
@@ -137,7 +135,6 @@ impl Simulation {
         for _ in 0..num_iters {
             self.num_cell_particles.fill(0);
 
-            // Pass 1: Hash and Cache the cell IDs
             for i in 0..self.num_particles {
                 let p = &self.particles[i];
                 let xi = ((p.x * self.p_inv_spacing).floor() as i32).clamp(0, (self.p_num_x - 1) as i32) as usize;
@@ -148,7 +145,6 @@ impl Simulation {
                 self.particle_cell_nrs[i] = cell_nr;
             }
 
-            // Pass 2: Prefix Sum
             let mut first = 0;
             for i in 0..self.p_num_cells {
                 first += self.num_cell_particles[i];
@@ -156,7 +152,6 @@ impl Simulation {
             }
             self.first_cell_particle[self.p_num_cells] = first as usize;
 
-            // Pass 3: Sort particles into cells
             for i in 0..self.num_particles {
                 let cell_nr = self.particle_cell_nrs[i]; 
                 self.first_cell_particle[cell_nr] -= 1;
@@ -164,17 +159,13 @@ impl Simulation {
                 self.cell_particle_ids[idx] = i;
             }
 
-            // Pass 4: Push colliding particles apart
             for i in 0..self.num_particles {
-                // Buffer the active coordinates. This avoids holding a mutable reference 
-                // to self.particles[i] while reading from self.particles[id2].
                 let mut px = self.particles[i].x;
                 let mut py = self.particles[i].y;
 
                 let pxi = ((px * self.p_inv_spacing).floor() as i32).clamp(0, (self.p_num_x - 1) as i32);
                 let pyi = ((py * self.p_inv_spacing).floor() as i32).clamp(0, (self.p_num_y - 1) as i32);
 
-                // Look at neighboring cells (Inclusive range fixes the boundary bug!)
                 let x0 = (pxi - 1).max(0);
                 let y0 = (pyi - 1).max(0);
                 let x1 = (pxi + 1).min(self.p_num_x as i32 - 1);
@@ -208,7 +199,6 @@ impl Simulation {
                                     left[i].y += dy * push;
                                     right[0].x -= dx * push;
                                     right[0].y -= dy * push;
-                                    // 🔽 Dodaj to:
                                     px += dx * push;
                                     py += dy * push;
                                 } else {
@@ -217,7 +207,6 @@ impl Simulation {
                                     right[0].y += dy * push;
                                     left[id2].x -= dx * push;
                                     left[id2].y -= dy * push;
-                                    // 🔽 Dodaj to:
                                     px += dx * push;
                                     py += dy * push;
                                 }
@@ -226,7 +215,6 @@ impl Simulation {
                     }
                 }
                 
-                // Write the buffered coordinates safely back to the array
                 self.particles[i].x = px;
                 self.particles[i].y = py;
             }
@@ -334,7 +322,6 @@ impl Simulation {
         }
     }
 
-    // to jest tak brzydkie że będzie trzeba refactorować xd
     pub fn transfer_velocities(&mut self, to_grid: bool, flip_ratio: f32) {
         let n = self.f_num_y;
         let h = self.h;
@@ -375,7 +362,6 @@ impl Simulation {
                 let x = p.x.clamp(h, max_bound_x);
                 let y = p.y.clamp(h, max_bound_y);
 
-                // Safe bounds
                 let x0 = (((x - dx) * h1).floor() as usize).min(self.f_num_x.saturating_sub(2));
                 let tx = ((x - dx) - x0 as f32 * h) * h1;
                 let x1 = (x0 + 1).min(self.f_num_x.saturating_sub(2));
