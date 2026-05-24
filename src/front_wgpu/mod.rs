@@ -39,6 +39,8 @@ pub struct FrontWgpu {
     grid_buffer: wgpu::Buffer,
     grid_bind_group: wgpu::BindGroup,
 
+    grid_instances: Vec<ParticleInstance>,
+
     pub sim: Simulation,
     pub runtime_config: RuntimeConfig
 }
@@ -185,6 +187,15 @@ impl FrontWgpu {
             cache: None
         });
 
+        let mut grid_instances = vec![ParticleInstance { position: [0.0, 0.0], color: [0.0, 0.0, 0.0] }; sim.f_num_cells];
+
+        for x in 0..sim.f_num_x {
+            for y in 0..sim.f_num_y {
+                let pos_x = ((x as f32 + 0.5) * sim.h / sim.config.width as f32) * 2.0 - 1.0;
+                let pos_y = ((y as f32 + 0.5) * sim.h / sim.config.height as f32) * 2.0 - 1.0;
+                grid_instances[x * sim.f_num_y + y].position = [pos_x, pos_y];
+            }
+        }
 
         Self {
             _window: window,
@@ -198,6 +209,7 @@ impl FrontWgpu {
             grid_buffer,
             grid_bind_group,
             particle_bind_group,
+            grid_instances,
             sim,
             runtime_config
         }
@@ -215,21 +227,14 @@ impl FrontWgpu {
                 color: [p.color.0, p.color.1, p.color.2],
             })
             .collect();
-        
-        let mut grid_instances = Vec::with_capacity(self.sim.f_num_cells);
-    for x in 0..self.sim.f_num_x {
-        for y in 0..self.sim.f_num_y {
-            let cell = &self.sim.grid[x * self.sim.f_num_y + y];
-            
-            let pos_x = ((x as f32 + 0.5) * self.sim.h / self.sim.config.width as f32) * 2.0 - 1.0;
-            let pos_y = ((y as f32 + 0.5) * self.sim.h / self.sim.config.height as f32) * 2.0 - 1.0;
-            
-            grid_instances.push(ParticleInstance {
-                position: [pos_x, pos_y],
-                color: [cell.color.0, cell.color.1, cell.color.2],
-            });
+
+        for x in 0..self.sim.f_num_x {
+            for y in 0..self.sim.f_num_y {
+                let idx = x * self.sim.f_num_y + y;
+                let cell = &self.sim.grid[idx];
+                self.grid_instances[idx].color = [cell.color.0, cell.color.1, cell.color.2];
+            }
         }
-    }
 
         self.queue.write_buffer(
             &self.particle_buffer, 
@@ -240,7 +245,7 @@ impl FrontWgpu {
         self.queue.write_buffer(
             &self.grid_buffer, 
             0, 
-            bytemuck::cast_slice(&grid_instances)
+            bytemuck::cast_slice(&self.grid_instances)
         );
 
 
