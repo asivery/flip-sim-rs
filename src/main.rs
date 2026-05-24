@@ -27,10 +27,10 @@ fn main() {
     };
 
     let runtime_config = config::RuntimeConfig {
-        dt: 1.0 / 60.0,
-        gravity: (20.0, -90.81),
+        dt: 1.0 /60.0,
+        gravity: (6.7, -9.81),
         flip_ratio: 0.9,
-        num_pressure_iters: 50,
+        num_pressure_iters: 100,
         num_particle_iters: 2,
         over_relaxation: 1.9,
         compensate_drift: true,
