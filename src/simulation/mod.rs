@@ -251,22 +251,31 @@ impl Simulation {
         let r = self.config.particle_radius;
         let xi = ((px * self.f_inv_spacing).floor() as i32).clamp(0, self.f_num_x as i32 - 1) as usize;
         let yi = ((py * self.f_inv_spacing).floor() as i32).clamp(0, self.f_num_y as i32 - 1) as usize;
+        const ITER_COUNT_MAX: i32 = 10;
 
         let mut min_y = yi;
-        while min_y > 0 && self.grid[xi * self.f_num_y + min_y].cell_type != CellTypes::Solid {
+        let mut itercount = 0;
+        while min_y > 0 && self.grid[xi * self.f_num_y + min_y].cell_type != CellTypes::Solid && itercount < ITER_COUNT_MAX {
             min_y -= 1;
+            itercount += 1;
         }
         let mut max_y = yi;
-        while max_y < self.f_num_y - 1 && self.grid[xi * self.f_num_y + max_y].cell_type != CellTypes::Solid {
+        itercount = 0;
+        while max_y < self.f_num_y - 1 && self.grid[xi * self.f_num_y + max_y].cell_type != CellTypes::Solid  && itercount < ITER_COUNT_MAX{
             max_y += 1;
+            itercount += 1;
         }
         let mut min_x = xi;
-        while min_x > 0 && self.grid[min_x * self.f_num_y + yi].cell_type != CellTypes::Solid {
+        itercount = 0;
+        while min_x > 0 && self.grid[min_x * self.f_num_y + yi].cell_type != CellTypes::Solid  && itercount < ITER_COUNT_MAX{
             min_x -= 1;
+            itercount += 1;
         }
         let mut max_x = xi;
-        while max_x < self.f_num_x - 1 && self.grid[max_x * self.f_num_y + yi].cell_type != CellTypes::Solid {
+        itercount = 0;
+        while max_x < self.f_num_x - 1 && self.grid[max_x * self.f_num_y + yi].cell_type != CellTypes::Solid  && itercount < ITER_COUNT_MAX{
             max_x += 1;
+            itercount += 1;
         }
 
         let solid_min_x = self.grid[min_x * self.f_num_y + yi].cell_type == CellTypes::Solid;
@@ -366,16 +375,11 @@ impl Simulation {
             let dy = if component == 0 { h2 } else { 0.0 };
 
             for i in 0..self.num_particles {
-                let p = &self.particles[i];
-                let (bx, by) = self.clamp_particle_to_walls(p.x, p.y);
-                let mut x = p.x;
-                let mut y = p.y;
-                if bx.0 < bx.1 {
-                    x = x.clamp(bx.0, bx.1);
-                }
-                if by.0 < by.1 {
-                    y = y.clamp(by.0, by.1);
-                }
+                 let p = &self.particles[i];
+                let max_bound_x = f32::max(h, (self.f_num_x as f32 - 1.0) * h);
+                let max_bound_y = f32::max(h, (self.f_num_y as f32 - 1.0) * h);
+                let x = p.x.clamp(h, max_bound_x);
+                let y = p.y.clamp(h, max_bound_y);
 
                 let x0 = (((x - dx) * h1).floor() as usize).min(self.f_num_x.saturating_sub(2));
                 let tx = ((x - dx) - x0 as f32 * h) * h1;
