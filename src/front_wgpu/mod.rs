@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use winit::dpi::PhysicalSize;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
@@ -213,6 +214,10 @@ impl FrontWgpu {
             sim,
             runtime_config
         }
+    }
+
+    pub fn get_window_size(&self) -> PhysicalSize<u32> {
+        self._window.inner_size()
     }
 
     pub fn render(&mut self) {

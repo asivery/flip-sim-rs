@@ -1,3 +1,4 @@
+use flip_sim_rs::simulation::config::RuntimeConfig;
 use flip_sim_rs::simulation::*;
 use flip_sim_rs::front_wgpu::*;
 
@@ -12,6 +13,8 @@ use winit::{
     window::*
 };
 
+const MAX_GRAVITY: f32 = 200.0;
+
 fn main() {
     let config = config::Config {
         width: 160,
@@ -23,8 +26,8 @@ fn main() {
     };
 
     let runtime_config = config::RuntimeConfig {
-        dt: 1.0 /60.0,
-        gravity: (0.0, -9.81),
+        dt: 1.0 / 60.0,
+        gravity: (0.0, -100.0),
         flip_ratio: 0.9,
         num_pressure_iters: 100,
         num_particle_iters: 2,
@@ -37,8 +40,8 @@ fn main() {
         obstacle_vel_x: 0.0,
         obstacle_vel_y: 0.0,
 
-        draw_grid: false,
-        draw_particles: true,
+        draw_grid: true,
+        draw_particles: false,
     };
 
     let mut sim = Simulation::new(&config); 
@@ -63,14 +66,7 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = App {
-        window: None,
-        front: None,
-        sim: Some(sim),
-        runtime_config,
-        last_frame: Instant::now(),
-        frame_acc: 0.0
-    };
+    let mut app = App::new(sim, runtime_config);
 
     event_loop.run_app(&mut app).unwrap();
 }
@@ -86,6 +82,18 @@ struct App {
 }
 
 
+impl App {
+    pub fn new(sim: Simulation, runtime_config: RuntimeConfig) -> Self {
+        Self {
+            window: None,
+            front: None,
+            sim: Some(sim),
+            runtime_config,
+            last_frame: Instant::now(),
+            frame_acc: 0.0
+        }
+    }
+}
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
@@ -127,6 +135,13 @@ impl ApplicationHandler for App {
                 KeyCode::Escape => event_loop.exit(),
                 _ => {}
             },
+            WindowEvent::CursorMoved { device_id: _, position } => {
+                let window_size = front.get_window_size();
+                front.runtime_config.gravity = (
+                    ((position.x as f32 - (window_size.width as f32 / 2.0)) / (window_size.width as f32 / 2.0)) * MAX_GRAVITY,
+                    -((position.y as f32 - (window_size.width as f32 / 2.0)) / (window_size.width as f32 / 2.0)) * MAX_GRAVITY,
+                );
+            }
  
             WindowEvent::Resized(new_size) => {
                 front.resize(new_size);
